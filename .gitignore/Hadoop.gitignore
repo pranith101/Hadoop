@@ -1,0 +1,78 @@
+	package myprog1;
+
+	import java.io.IOException;
+	import java.util.StringTokenizer;
+	import java.util.Date;
+	import java.text.SimpleDateFormat;
+	import org.apache.hadoop.conf.Configuration;
+	import org.apache.hadoop.fs.Path;
+	import org.apache.hadoop.io.IntWritable;
+	import org.apache.hadoop.io.LongWritable;
+	import org.apache.hadoop.io.Text;
+	import org.apache.hadoop.mapreduce.Job;
+	import org.apache.hadoop.mapreduce.Mapper;
+	import org.apache.hadoop.mapreduce.Reducer;
+	import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+	import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+
+
+	public class Project1
+	{
+		public static class MyMap extends Mapper<LongWritable,Text,Text,IntWritable>
+	{
+
+	String Pid;
+		
+		public void map(LongWritable k,Text v,Context con) throws IOException, InterruptedException
+		{
+			
+			String[] words=v.toString().split("\t");
+			String patientID = words[1];
+			String dateStart = words[3];
+			String dateStop = words[4];
+
+			//HH converts hour in 24 hours format (0-23), day calculation
+			SimpleDateFormat format = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+
+			Date d1 = null;
+			Date d2 = null;
+try{
+				d1 = format.parse(dateStart);
+				d2 = format.parse(dateStop);
+
+				//in milliseconds
+				long diff = d2.getTime() - d1.getTime();
+
+				long diffMinutes = diff / (60 * 1000) % 60;
+				
+				int Time = (int) diffMinutes;
+				
+		
+				
+				if(diffMinutes > 40)
+
+			con.write(new Text(Pid),new IntWritable(Time));
+
+}catch (Exception e) { 
+	e.printStackTrace();}
+		}
+	}
+	public static void main(String[] args) throws Exception {
+	    	Configuration c = new Configuration();
+		Path p1=new Path(args[0]);
+		Path p2=new Path(args[1]);
+		Job j = new Job(c,"MyJob1");
+	    	j.setJarByClass(Project1.class);
+	    	j.setMapperClass(MyMap.class);
+	    	j.setOutputKeyClass(Text.class);
+	    	j.setOutputValueClass(IntWritable.class);
+	    	FileInputFormat.addInputPath(j,p1);
+	    	FileOutputFormat.setOutputPath(j,p2);
+	    	System.exit(j.waitForCompletion(true) ? 0 : 1);
+	
+	}
+	
+}
+	
+	
