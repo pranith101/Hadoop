@@ -1,0 +1,88 @@
+Project 2: HIVE and HBase 
+
+HIVE
+1.a Find all the patients for whom the time-difference between "dispatched" and "at_hospital" is > 40 min (for Transport)
+
+hive>create table if not exists transport7 (cid varchar(50),dispatched string,at_hospital string,incidentid int,unit varchar(50),incident_type varchar(50),age int,gender char(20),gcs int,location varchar(60),hospital_name varchar(50),reason varchar(20))
+row format delimited
+fields terminated by '\t'
+lines terminated by '\n'
+stored as textfile;
+
+>hadoop fs -put /home/cloudera/Desktop/transport2.txt /
+>load data inpath '/transport2.txt' into table transport7;
+
+hive>select cid,at_hospital,dispatched from transport7 where (unix_timestamp('at_hospital') - unix_timestamp('dispatched'))/60 > 40;
+
+
+1b.Find all the patients who have same diagnosis and are no more than 3 years apart in age (for StrokePMT)
+
+>select p.gs_stroketype,p.age from strokepmt p join strokepmt q on (p.gs_stroketype=q.gs_stroketype) where p.gs_age - q.gs_age <3;
+
+
+
+
+
+Hbase:
+2.a Find all the patients who have same diagnosis and are no more than 3 years apart in age (for StrokePMT)
+
+>Enter into HBase shell
+$ hbase shell
+hbase(main):001:0> create 'strokepmt', 'strokepmt_data'
+
+>PIG script to load data into the ‘customers’ table in HBase
+PigScript:
+raw_data = LOAD 'hdfs:/user/Desktop/stroke.txt' USING PigStorage('\t') AS (
+gs_stroketype chararray,gs_age int );
+
+STORE raw_data INTO 'hbase://transport' USING org.apache.pig.backend.hadoop.hbase.HBaseStorage(
+'strokepmt_data:gs_stroketype
+strokepmt_data:gs_age'
+);
+>PIG_CLASSPATH=/usr/lib/hbase/hbase.jar:/usr/lib/zookeeper/zookeeper-3.4.5-cdh4.4.0.jar /usr/bin/pig /home/training/Load_HBase_stroke.pig
+Hbase Integration with HIVE External table:
+
+hive>CREATE EXTERNAL TABLE hbase_hivetable_t(key string, value string)
+STORED BY ‘org.apache.hadoop.hive.hbase.HBaseStorageHandler’
+WITH SERDEPROPERTIES (“hbase.columns.mapping” = “strokepmt_data:val”)
+TBLPROPERTIES(“hbase.table.name” = “strokepmt”);
+
+hive>select p.gs_stroketype,p.age from strokepmt p join strokepmt q on (p.gs_stroketype=q.gs_stroketype) where
+p.gs_age - q.gs_age <3;
+
+
+
+2.b Find all the patients for whom the time-difference between "dispatched" and "at_hospital" is > 40 min (for Transport)
+>Enter into HBase shell
+$ hbase shell
+hbase(main):001:0> create 'transport', 'transport_data'
+>PIG script to load data into the ‘transport’ table in HBase
+raw_data = LOAD 'hdfs:/user/Desktop/transport' USING PigStorage('\t') AS (           
+cid:chararray,dispatched chararray,at_hospital chararray,incidentid int,unit chararray,incident_type chararray,age int,gender chararray,gcs int,location chararray,hospital_name chararray,reason chararray
+);
+
+STORE raw_data INTO 'hbase://transport' USING org.apache.pig.backend.hadoop.hbase.HBaseStorage(
+'transport_data:cid
+ transport_data:dispatch 
+ transport_data:at_hospital
+ transport_data:incidentid
+ transport_data:unit
+ transport_data:incident_type
+ transport_data:age
+ transport_data:gender
+ transport_data:gcs
+ transport_data:location
+ transport_data:hospital_name
+ transport_data:reason'
+);
+
+>PIG_CLASSPATH=/usr/lib/hbase/hbase.jar:/usr/lib/zookeeper/zookeeper-3.4.5-cdh4.4.0.jar /usr/bin/pig /home/Desktop/Load_HBase_transport.pig
+Hbase Integration with HIVE External table:
+
+hive>CREATE EXTERNAL TABLE hbase_hivetable_t(key string, value string)
+STORED BY ‘org.apache.hadoop.hive.hbase.HBaseStorageHandler’
+WITH SERDEPROPERTIES (“hbase.columns.mapping” = “transport_data:val”)
+TBLPROPERTIES(“hbase.table.name” = “transport”);
+
+hive>select cid,at_hospital,dispatched from hbase_hivetable_t where (unix_timestamp('at_hospital') - unix_timestamp('dispatched'))/60 > 40;
+
